@@ -4,6 +4,7 @@
 MedSAM은 SAM(meta, face book회사에서 나온 segment anything 이라는 모델)을 의료 영역에 적용하는 사례를 보여준다. 
 
 ##SAM 구조 
+
     1. image encoder(transformer-based) ; extract image features - output token이 있는데, 이건 기존 ViT 모델에서 쓰던 cls token이랑 유사한 trainable 토큰
         - image encoder안의 vision transformer(1024x1024, high resolution image process 가능)는 masked auto-encoder modeling으로 pretrained 됨. 
         obtained image embedding ; 16x downscaled(64x64)
@@ -144,6 +145,7 @@ MedSAM은 SAM(meta, face book회사에서 나온 segment anything 이라는 모�
 
 
 #pseudo code
+```bash
 image encoder
     1. image를 convolutaion2d 연산을 통해 patch Embedding 한다. 
     convolution2d(input_channels = 3, embedding dimension = 768, kernel size = [16, 16], stride = [16, 16], padding = [0, 0])
@@ -154,6 +156,5 @@ prompt encoder
     5. convolution2d layer, layer  normalization , activation function layer, convolution2d layer, layer  normalization , activation function layer, convolution2d layer 를 순차적으로 구성한다. 
 mask decoder
     6. prompt encoder의 결과와 image encoder의 결과를 사용해 output을 도출한다. 
-
-평가 후 체크포인트 저장.
+```
 
