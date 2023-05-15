@@ -1,107 +1,159 @@
-# MedSAM 
-This is the official repository for MedSAM: Segment Anything in Medical Images.
+#Introduction 
+
+#MedSAM
+MedSAM은 SAM(meta, face book회사에서 나온 segment anything 이라는 모델)을 의료 영역에 적용하는 사례를 보여준다. 
+
+##SAM 구조 
+    1. image encoder(transformer-based) ; extract image features - output token이 있는데, 이건 기존 ViT 모델에서 쓰던 cls token이랑 유사한 trainable 토큰
+        - image encoder안의 vision transformer(1024x1024, high resolution image process 가능)는 masked auto-encoder modeling으로 pretrained 됨. 
+        obtained image embedding ; 16x downscaled(64x64)
+
+    2. prompt encoders ; to incorporate user interactions
+        - 사용자 입력에 따라 맞춰서 대응할 수 있도록 하기 위함이다. 
+        - sam은 네가지 다른 prompt 종류 지운 ; points, boxes, texts, masks
+        * sparse prompt ; points, bounding box, text
+        * dense promt ; mask
 
 
-## Installation 
-1. Create a virtual environment `conda create -n medsam python=3.10 -y` and activate it `conda activate medsam`
-2. Install [Pytorch 2.0](https://pytorch.org/get-started/locally/)
-3. `git clone https://github.com/bowang-lab/MedSAM`
-4. Enter the MedSAM folder `cd MedSAM` and run `pip install -e .`
+    3. mask decoder ; to generate segmentation results, confidence scores - image embedding, prompt embedding, output token 입력을 기반으로 함.
+    특징 ) light weight design. 
+    - 두개의 transformer layers는 아래 두개의 head 포함. 
+        - dynamic mask prediction head ; output - 세개의 4x downscsaled masks ( 각 각 whole object, part, and subpart of the object에 대응함. )
+        - intersection-over-Union(IoU) score regression head
 
 
-## Fine-tune SAM on customized dataset
-
-We provide a step-by-step tutorial with a small dataset to help you quickly start the training process.
-
-### Data preparation and preprocessing
-
-Download [SAM checkpoint](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth) and place it at `work_dir/SAM/sam_vit_b_01ec64.pth` .
-
-Download the demo [dataset](https://zenodo.org/record/7860267) and unzip.
-
-This dataset contains 50 abdomen CT scans and each scan contain an annotation mask with 13 organs. The names of the organ label are available at [MICCAI FLARE2022](https://flare22.grand-challenge.org/).
-In this tutorial, we will fine-tune SAM for gallbladder segmentation.
-
-Run pre-processing
-
-```bash
-python pre_CT.py -i path_to_image_folder -gt path_to_gt_folder -o path_to_output
-```
-
-- split dataset: 80% for training and 20% for testing
-- image normalization
-- pre-compute image embedding
-- save the normalized images, ground truth masks, and image embedding as a `npz` file
-
-> Note: Medical images have various data formats. Thus, it's impossible that one script can handle all these different formats. Here, we provide two typical examples for CT and non-CT (e.g., various MR sequences, PET images) image preprocessing. You can adapt the preprocessing code to your own datasets.
-
-### Model Training ([Video Tutorial](https://drive.google.com/file/d/1EvVBTSa9L7pDTmUOp-MHXxGD1lrU9Txk/view?usp=share_link))
-
-Please check the step-by-step tutorial: finetune_and_inference_tutorial_3D_dataset.ipynb
-
-We also provide a tutorial on 2D dataset (png format): finetune_and_inference_tutorial_2D_dataset.ipynb 
-
-You can also train the model on the whole dataset. 
-1) Download the training set ([GoogleDrive](https://drive.google.com/drive/folders/1pwpAkWPe6czxkATG9SmVV0TP62NZiKld?usp=share_link))
-
-> Note: For the convenience of file sharing, we compress each image and mask pair in a `npz` file. The pre-computed image embedding is too large (require ~1 TB space). You can generate it with the following command
-
-2) Pre-compute the image embedding and save the image embedding and ground truth as `.npy` files. 
-
-```bash
-python utils/precompute_img_embed.py -i path_to_train_folder -o ./data/Tr_npy
-```
-
-3) Train the model
-
-```bash
-python train -i ./data/Tr_npy --task_name SAM-ViT-B --num_epochs 1000 --batch_size 8 --lr 1e-5
-```
-
-If you find this dataset valuable in your research, kindly acknowledge and credit the original data sources: [AMOS](https://zenodo.org/record/7262581), [BraTS2021](http://braintumorsegmentation.org/), [ACDC](https://www.creatis.insa-lyon.fr/Challenge/acdc/), [M\&Ms](https://www.ub.edu/mnms/), [PROMISE12](https://promise12.grand-challenge.org/) [ABCs](https://abcs.mgh.harvard.edu/), [AbdomenCT-1K](https://ieeexplore.ieee.org/document/9497733), [MSD](http://medicaldecathlon.com/), [KiTS19](https://kits19.grand-challenge.org/), [LiTS](https://competitions.codalab.org/competitions/17094), [COVID-19 CT-Seg](https://github.com/JunMa11/COVID-19-CT-Seg-Benchmark), [HECKTOR](https://www.sciencedirect.com/science/article/pii/S1361841521003819) [DRIVE](https://drive.grand-challenge.org/), [Colon gland](https://www.kaggle.com/datasets/sani84/glasmiccai2015-gland-segmentation), [polyp](https://www.nature.com/articles/s41597-023-01981-y), [instruments](https://www.synapse.org/#!Synapse:syn22427422), [Abdomen Ultrasound](https://www.kaggle.com/datasets/ignaciorlando/ussimandsegm), [Breast Ultrasound](https://www.sciencedirect.com/science/article/pii/S2352340919312181), [JSRT](http://imgcom.jsrt.or.jp/minijsrtdb/)
 
 
-## Inference
+##위의 모델(sam)을 의료 이미지에 적용했을 때
 
-Download the model checkpoint ([GoogleDrive](https://drive.google.com/drive/folders/1bWv_Zs5oYLpGMAvbotnlNXJPq7ltRUvF?usp=share_link)) and testing data ([GoogleDrive](https://drive.google.com/drive/folders/1Qx-4EM0MoarzAfvSIp9fkpk8UBrWM6EP?usp=share_link)) and put them to `data/Test` and `work_dir/MedSAM` respectively. 
+    a. segmen-anything mode(mask mode) - 두개의 제한점
+    - segmentaion results do not have semantic lables
+    - clinicians mainly focus on meaningful ROLs in clinial scenarios. ( liver, kidneys, spleen, and lesinos 등. )
+    ;즉, useless region 분류를 할 확률이 높다. 
 
-Run
-
-```bash
-python MedSAM_Inference.py -i ./data/Test -o ./ -chk work_dir/MedSAM/medsam_20230423_vit_b_0.0.1.pth
-```
-
-The segmentation results are available at [here](https://drive.google.com/drive/folders/1I8sgCRi30QtMix8DbDBIBTGDM_1FmSaO?usp=sharing).
-
-
-The implementation code of DSC and NSD can be obtained [here](http://medicaldecathlon.com/files/Surface_distance_based_measures.ipynb).
+    b. bbox mode - 제대로 잘 검출함
+    ; 명확하게 ROI를 확인하고 의미있는 segmentation 결과를 얻을 수 있음. 
+    ; radiology에서 흔하게 사용되는 annotation 방법은 longest diameter를 라벨링함.  
+    * RECIST (Response Evaluation Criteria in Solid Tumors) annotation - 암 환자의 종양 반응을 평가하기 위해 사용되는 표준화된 척도
 
 
-## To-do-list
+    c. point mode - foreground point와 여러번의 background points들을 지정해야 원하는 부위를 segmentation했다. 
+    ; 여러번의 predition-correction iteration 이 필요하고 애매하다. 
 
-- [ ] Train the ViT-H model
-- [ ] Explore other fine-tuning methods, e.g., fine-tune the image encoder as well, lora fine-tuning
-- [ ] Support scribble prompts
-- [ ] Support IoU/DSC regression
-- [ ] Enlarge the dataset
-- [ ] 3D slicer and napari support
-
-We are excited about the potential of segmentation foundation models in the medical image domain. However, training such models requires extensive computing resources. Therefore, we have made all the pre-processed training and images publicly available for research purposes. To prevent duplication of effort (e.g., conduct the same experiemnts), we encourage sharing of results and trained models on the discussion page. We look forward to working with the community to advance this exciting research area.
+    따라서 실제 medical image segmentation task에서는 bbox 모두가 실용적이라고 판단. 
 
 
-## Acknowledgements
-- We highly appreciate all the challenge organizers and dataset owners for providing the public dataset to the community. 
-- We thank Meta AI for making the source code of [segment anything](https://github.com/facebookresearch/segment-anything) publicly available.
-- We also thank Alexandre Bonnet for sharing this great [blog](https://encord.com/blog/learn-how-to-fine-tune-the-segment-anything-model-sam/)
+##MedSAM
+
+    SAM의 모델 구조( image encoder, prompt encoder, mask decoder) 중 image encoder 부분은 ViT에 기반하는, SAM 모델에서 가장 computational cost가 많이 드는 부분.해당 부분 frozen 상태로 유지. 
+    prompt encoder의 pre-trained bounding box encoder부분은 bounding box의 positional information을 충분히 포함하므로 이 부분도 frozen 상태로 유지. 
+    mask decoder 부분만 fine-tuning 수행
+
+    - 각 prompt 마다 매번 image embedding을 수행하는 것은 비효율적이므로 trainging image에 대한 embedding은 pre-compute. 
+    ; training efficiency  향상. 
+    - 기존 mask decoder는 세개의 영역에 대한 mask를 생성했지만 bouinding box prompt가 명확하게 대상을 명시해주므로 하나의 mask만 생성하면 된다. 
 
 
-## Reference
+    data curation and preprocessing 
+        - 33개의 다양한 segmentation task (21개 3D image, 9개 2D image)를 가지는 대규모 데이터셋에 대하여 중점을 두었다.
+        
+        intensity value 조정
+            1. 
+            CT image - intensity value [-500, 100] 범위로 clip (대부분의 조직을 포함하는 범위. )
+            나머지 이미지 - intensity value를 [0.95th , 99.5th percentiles]
+            2. intensity value normalize to the range [0, 255]
+            3, resize the images to a uniform size of 256x256x3 
 
-```
-@article{MedSAM,
-  title={Segment Anything in Medical Images},
-  author={Ma, Jun and Wang, Bo},
-  journal={arXiv preprint arXiv:2304.12306},
-  year={2023}
-}
-```
+        - randomly split each dataset into 80 and 20 for training and testing
+        - segmentation 영역이 100pixel 이하인 것 제외. 
+        - SAM은 2D segmentation 모델로 고안되었으므로 3D 이미지들을 2D로 slicing
+
+    training protocol
+        - 위에서 전처리한 이미지들을 image encoder에 입력( 256x256x3 ); output image size (3x1024x1024)
+        - 학습용 bounding box ; GT mask에서 생성, 랜덤한게 perturbation of 0-20 pixels. - 사용자가 입력하는 bounding box에 유연성을 갖기 위해. 
+        - loss function ; Dice loss + Cross-entropy loss (unweighted sum) ; 다양한 segmentation task에서 robust하다고 증명됨. 
+        - optimizer ; Adam optimizer, initial learning rate of 1e-5
+
+    evalutaion results
+        region overlap ration and boundary consensus evalutaion method
+        - DSC (Dice similarity coefficient)
+        - NSD ( Normalized Surface Distance, tolerance 1mm)
+
+        SAM과의 성능 비교
+        - 3D images
+            평균 22.5% DSC 향상, 39.1% NSD 향상
+        - 2D images
+            평균 17.6% DSC 향상, 18.9% NSD 향상
+
+        SAM은 큰 장기에 대한 성능은 좋았으나 병변 segmentation task에는 좋은 성능을 보이지 못함. 
+        - SAM은 3D 작업에 낮은 NSD. 
+        - SAM은 2D에서는 비슷한 DSC, NSD는 더 높음. 
+        - 주로 경계선 검출 성능이 떨어진다. 
+        - lesion 검출 능력이 매우 떨어진다. 
+        - SAM, MedSAM은 DSC와 NSD 둘 다 더 우수하다. 
+
+
+
+#환경 설정 (Installation, run)
+
+1. 가상환경 생성
+'conda create -n medsam python=3.10 -y'
+
+2. 가상환경 실행
+'conda activate medsam'
+
+3. pytorch 2.0 설치
+
+4. git clone 수행
+
+5. install dependency
+'cd Med_SAM'
+'pip install -e .'
+
+
+
+
+#custom dataset Fine-tuning 
+
+1. check point download.
+    SAM check point는 work_dir/SAM directory 에 저장해서 사용하세요. 
+    'wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth' 수행시 다운이 가능합니다. 
+    기존 SAM에서 pre-train 된 것을 가져온 것입니다. 
+
+2. get medical dataset
+    data directory에 원하는 의료 이미지를 저장합니다. 
+    fine-tuning demo를 위한 데이터셋은 https://drive.google.com/file/d/18GhVEODbTi17jSeBXdeLQ7vHPdtlTYXK/view?usp=share_link에 있습니다. unzip해서 data 디렉토리 내부에 넣어 사용하세요. 
+
+    이 데이터셋에는 50개의 복부 CT 스캔이 포함되어 있으며, 각 스캔에는 13개의 장기에 대한 주석 마스크가 있습니다. 장기 레이블의 이름은 MICCAI FLARE2022에서 사용 가능합니다. 이 튜토리얼에서는 SAM(Spatial Attention Module)을 담담 세포(담낭) 분할을 위해 파인튜닝할 것입니다.
+
+    만일 fine-tuning을 원하는 데이터셋이 있다면 data directory에 저장하세요. 
+
+
+3. pre-processing 수행
+    'python pre_grey_rgb2D.py'
+
+    만일 fine-tuning을 원하는 2D데이터셋이 있다면 아래와 같이 수행하세요.
+
+    ```bash
+    python pre_grey_rbg2D.py -i path_to_image_folder -gt path_to_gt_folder -o path_to_output
+    ```
+
+4. model training tutorial 
+    finetune_and_inference_tutorial_2D_dataset.ipynb 셀을 실행해서 2D medical dataset tutorial 을 수행하세요. 
+
+
+
+#pseudo code
+image encoder
+    1. image를 convolutaion2d 연산을 통해 patch Embedding 한다. 
+    convolution2d(input_channels = 3, embedding dimension = 768, kernel size = [16, 16], stride = [16, 16], padding = [0, 0])
+    2. absolute positional embedding 을 pretrain image size로 초기화한다.
+    3. 설정한 깊이 (12)만큼 widnow attention 과 residual propagation을 수행하는 transformer 블럭을 생성한다. 
+    4. image encoder의 neck으로 convolution2d, layernormalization 2d, convolutional2d, layernormalization2d를 순차적으로 쌓아 구성한다. 
+prompt encoder
+    5. convolution2d layer, layer  normalization , activation function layer, convolution2d layer, layer  normalization , activation function layer, convolution2d layer 를 순차적으로 구성한다. 
+mask decoder
+    6. prompt encoder의 결과와 image encoder의 결과를 사용해 output을 도출한다. 
+
+평가 후 체크포인트 저장.
+
