@@ -1,9 +1,9 @@
-#Introduction 
+# Introduction 
 
-#MedSAM
+# MedSAM
 MedSAM은 SAM(meta, face book회사에서 나온 segment anything 이라는 모델)을 의료 영역에 적용하는 사례를 보여준다. 
 
-##SAM 구조 
+## SAM 구조 
 
     1. image encoder(transformer-based) ; extract image features - output token이 있는데, 이건 기존 ViT 모델에서 쓰던 cls token이랑 유사한 trainable 토큰
         - image encoder안의 vision transformer(1024x1024, high resolution image process 가능)는 masked auto-encoder modeling으로 pretrained 됨. 
@@ -25,7 +25,7 @@ MedSAM은 SAM(meta, face book회사에서 나온 segment anything 이라는 모�
 
 
 
-##위의 모델(sam)을 의료 이미지에 적용했을 때
+## 위의 모델(sam)을 의료 이미지에 적용했을 때
 
     a. segmen-anything mode(mask mode) - 두개의 제한점
     - segmentaion results do not have semantic lables
@@ -44,7 +44,7 @@ MedSAM은 SAM(meta, face book회사에서 나온 segment anything 이라는 모�
     따라서 실제 medical image segmentation task에서는 bbox 모두가 실용적이라고 판단. 
 
 
-##MedSAM
+## MedSAM
 
     SAM의 모델 구조( image encoder, prompt encoder, mask decoder) 중 image encoder 부분은 ViT에 기반하는, SAM 모델에서 가장 computational cost가 많이 드는 부분.해당 부분 frozen 상태로 유지. 
     prompt encoder의 pre-trained bounding box encoder부분은 bounding box의 positional information을 충분히 포함하므로 이 부분도 frozen 상태로 유지. 
@@ -95,7 +95,7 @@ MedSAM은 SAM(meta, face book회사에서 나온 segment anything 이라는 모�
 
 
 
-#환경 설정 (Installation, run)
+# 환경 설정 (Installation, run)
 
 1. 가상환경 생성
 'conda create -n medsam python=3.10 -y'
@@ -114,7 +114,7 @@ MedSAM은 SAM(meta, face book회사에서 나온 segment anything 이라는 모�
 
 
 
-#custom dataset Fine-tuning 
+# custom dataset Fine-tuning 
 
 1. check point download.
     SAM check point는 work_dir/SAM directory 에 저장해서 사용하세요. 
@@ -144,7 +144,7 @@ MedSAM은 SAM(meta, face book회사에서 나온 segment anything 이라는 모�
 
 
 
-#pseudo code
+# pseudo code
 ```bash
 image encoder
     1. image를 convolutaion2d 연산을 통해 patch Embedding 한다. 
@@ -158,3 +158,44 @@ mask decoder
     6. prompt encoder의 결과와 image encoder의 결과를 사용해 output을 도출한다. 
 ```
 
+# AI특론 기말과제
+
+
+## 전처리
+    pre_grey_rgb2D.py. 이 때 데이터 위치는 -i annotation으로 지정. 
+    다운로드 받은 이미지 파일을 8 :2 로 나눈 뒤 npz 파일로 변경해주는 전처리 pre_grey_rgb2D.py 수행. 
+    현재 이미지는 medsam에서 제공하는 데모용 ct라서 기본적으로 -i 지정 안해줘도 default로 들어가서 전처리가 수행됨. 
+
+## fine tuning
+    os.makedirs()수행 - 4번째 셀
+    'data/demo2d_vit_b' directory가 생성됨. 
+    기존의 jpg 파일을 npz 파일로 변환해서 위의 directory에 저장. 
+    이 안에 npz 파일들 저장되어있음. 
+
+## inference
+### 기존
+    test directory 에 있는 실제 gt label의 segmentation 영역에서 bbox를
+    추출해 이에 대해 약간의 random한 변형을 주어 잘 segmentation 하는지 수행. 
+
+### 제안 부분
+    해당 모델에서 와 다르게 실제 ct영역에서 segmentation auto-labelling으로 사용하려 한다면, CT는 computational tomography, 즉 연속성이 있기 때문에 가까운 거리의 CT 이미지에서 bbox가 어느정도 공유된다고 판단. 
+    이로 인해 같은 사람에 한하여 그 전 이미지의 segmentation 결과를 다음 이미지의 bbox로 입력하게 되면 실제 라벨링을 수행할 때 여러장의 segmentation을 위해 bbox를 구해내는 것 보다 한장의 bbox를 통해 전체 ct에서 원하는 결과를 얻을 수 있을 것이라 생각. 
+    따라서 현재 test dataset들에 한하여 가장 첫 이미지가 target의 대표 이미지라고 가정하고 gt segmentation을 그대로 가져와서 사용하지 않고 추론한 결과를 바탕으로 다른 이미지를 추론할 수 있도록 한다. 
+
+### 장점
+    기존에는 실제 사용상황이라고 한다면 전체 CT 이미지에서 원하는 결과를 위해 여러장의 이미지에 bbox를 일일히 제공해야했지만 현재 제시하는 것은 그 노동력을 줄일 수 있다. 
+
+## Original sam inference  vs medsam inference
+    기존에 pretrained된 sam 모델을 가지고 추론한 것과 medical image 에 대하여 fine-tuning한 medsam모델의 추론 결과를 비교한다. 
+    이때 위에서 제시한 방법이 gt를 사용해 bbox를 추론한 결과와 유사할수록 실제 효용성이 있을 것으로 예상된다. 
+
+## result 
+    위의 제안과 순서를 바탕으로 finetune_and_inference_CT_dataset_SAI에 그 과정을 구현해놓았다. 
+    구현 결과, 아래와 같은 결과가 나왔다. 
+    
+| result | SAM | MedSAM |
+|----------|----------|----------|
+| 제시방법   | 0.2399| 0.6608|
+| gt 사용 | 0.6499 | 0.8921 |
+
+    SAM은 당연하게 fine-tuning된 medsam보다 그 성능이 낮으며, 작은 이미지에 약하다. 반면 MedSAM은 그보다 좋은 성능을 보이는 것을 알 수 있다. 또한 MedSAM의 경우 제시 방법과 gt 사용으로 생성한 bbox의 성능 차이가 0.23정도로, 이는 random하게 생성하는 bbox의 parameter와 더욱 많은 데이터로 학습시 성능이 향상될 것으로 보인다. 
